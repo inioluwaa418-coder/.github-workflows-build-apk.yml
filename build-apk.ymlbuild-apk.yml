@@ -1,0 +1,73 @@
+name: Build demo APK
+
+# Builds the AndroidLiquidGlassView demo app from the zip in this repo and
+# posts the APK as a GitHub release, so you can tap the file under "Releases"
+# to download it. Starts when this file is committed; re-run any time from the
+# Actions tab ("Build demo APK" -> "Run workflow").
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to create the release
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Gets the files in this repo, including the zip you uploaded.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Unzips the project and finds the folder that contains gradlew.
+      - name: Unzip the project
+        run: |
+          ZIP="$(ls -1 ./*.zip | head -n 1)"
+          echo "Using $ZIP"
+          mkdir unpacked
+          unzip -q "$ZIP" -d unpacked
+          ROOT="$(dirname "$(find unpacked -name gradlew -print -quit)")"
+          echo "Project folder: $ROOT"
+          mv "$ROOT" src
+          ls src
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Installs the Android command-line tools and accepts the SDK licenses,
+      # so Gradle can download compileSdk 37 and matching build-tools itself.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # -Pjitpack=true skips the Maven Central publishing/signing setup in
+      # core/build.gradle, which the demo app doesn't need.
+      - name: Build debug APK
+        working-directory: src
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug -Pjitpack=true --stacktrace
+
+      # Debug builds are signed with the standard debug key, so the APK can be
+      # installed directly on a phone.
+      - name: Keep a copy as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AndroidLiquidGlassView-demo-debug-apk
+          path: src/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publish APK as a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "apk-${{ github.run_number }}" \
+            src/app/build/outputs/apk/debug/app-debug.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Demo APK #${{ github.run_number }}" \
+            --notes "AndroidLiquidGlassView 1.1.0 demo app (debug build). The glass effect needs Android 13 or newer."
+            
