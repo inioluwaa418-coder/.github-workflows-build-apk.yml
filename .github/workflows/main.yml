@@ -1,3 +1,5 @@
+# v2 - replaces the Android SDK setup step that failed in the first run
+
 name: Build demo APK
 
 # Builds the AndroidLiquidGlassView demo app from the zip in this repo and
@@ -38,10 +40,14 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # Installs the Android command-line tools and accepts the SDK licenses,
-      # so Gradle can download compileSdk 37 and matching build-tools itself.
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # The runner already includes the Android SDK. This step only accepts its
+      # licenses, so Gradle can download compileSdk 37 and matching build-tools
+      # itself.
+      - name: Accept Android SDK licenses
+        run: |
+          SDKMANAGER="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | tail -n 1)"
+          echo "Using $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
 
       # -Pjitpack=true skips the Maven Central publishing/signing setup in
       # core/build.gradle, which the demo app doesn't need.
@@ -70,4 +76,3 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "Demo APK #${{ github.run_number }}" \
             --notes "AndroidLiquidGlassView 1.1.0 demo app (debug build). The glass effect needs Android 13 or newer."
-            
